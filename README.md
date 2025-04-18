@@ -5,6 +5,8 @@
 
 > *"One CLI to rule them all, one CLI to find them, one CLI to bring them all, and in the configurations bind them."*
 
+![mcpenetes in action](https://github.com/user-attachments/assets/bf84188d-e043-4436-bebb-ef206ff10d8f)
+
 ## 🌟 What is mcpenetes?
 
 **mcpenetes** is a magical CLI tool that helps you manage multiple Model Context Protocol (MCP) server configurations with ease! If you're tired of manually editing config files for different MCP-compatible clients whenever you want to switch servers, mcpenetes is here to save your day.
