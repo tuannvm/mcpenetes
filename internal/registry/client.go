@@ -2,11 +2,12 @@ package registry
 
 import (
 	"encoding/json"
-	"fmt"
+	"fmt" // Re-add fmt import for Errorf
 	"net/http"
 	"time"
 
-	"github.com/tuannvm/mcpenetes/internal/cache" // Added cache package
+	"github.com/tuannvm/mcpenetes/internal/cache"
+	"github.com/tuannvm/mcpenetes/internal/log"
 )
 
 // RegistryIndex represents the expected structure of the JSON file at a registry URL.
@@ -19,17 +20,17 @@ type RegistryIndex struct {
 // It checks the cache first and falls back to HTTP request on miss or expiry.
 func FetchMCPList(url string) ([]string, error) {
 	// 1. Check cache first
-	cachedEntry, err := cache.ReadCache(url)
+	versions, cacheMiss, err := cache.ReadCache(url) // Use the 3 return values
 	if err != nil {
 		// Log cache read error but proceed as if it was a miss
-		fmt.Printf("Warning: Failed to read cache for %s: %v\n", url, err)
+		log.Warn("Failed to read cache for %s: %v", url, err) // Use log.Warn
 	}
-	if cachedEntry != nil {
-		fmt.Printf("  Cache hit for %s\n", url) // Inform user about cache hit
-		return cachedEntry.Versions, nil
+	if !cacheMiss {
+		log.Detail("  Cache hit for %s", url) // Use log.Detail for less important info
+		return versions, nil
 	}
 
-	fmt.Printf("  Cache miss or expired for %s, fetching...\n", url) // Inform user about fetch
+	log.Info("  Cache miss or expired for %s, fetching...", url) // Use log.Info
 
 	// 2. Cache miss or expired, proceed with HTTP fetch
 	client := &http.Client{
@@ -61,7 +62,7 @@ func FetchMCPList(url string) ([]string, error) {
 	// 3. Write the fetched result to cache
 	if err := cache.WriteCache(url, index.Versions); err != nil {
 		// Log cache write error but don't fail the operation
-		fmt.Printf("Warning: Failed to write cache for %s: %v\n", url, err)
+		log.Warn("Failed to write cache for %s: %v", url, err) // Use log.Warn
 	}
 
 	return index.Versions, nil
