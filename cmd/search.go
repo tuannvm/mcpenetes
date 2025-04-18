@@ -16,8 +16,8 @@ import (
 
 // ServerInfo represents information about an MCP server
 type ServerInfo struct {
-	Name         string
-	Description  string
+	Name          string
+	Description   string
 	RepositoryURL string
 }
 
@@ -46,22 +46,22 @@ var searchCmd = &cobra.Command{
 
 		var serverInfos []ServerInfo
 		var displayOptions []string
-		
+
 		for _, reg := range cfg.Registries {
 			servers, err := registry.FetchMCPServers(reg.URL)
 			if err != nil {
 				log.Warn("Error fetching from registry %s: %v", reg.URL, err)
 				continue
 			}
-			
+
 			for _, server := range servers {
 				info := ServerInfo{
-					Name:         server.Name,
-					Description:  server.Description,
+					Name:          server.Name,
+					Description:   server.Description,
 					RepositoryURL: server.RepositoryURL,
 				}
 				serverInfos = append(serverInfos, info)
-				
+
 				// Create display option string
 				displayText := server.Name
 				if server.Description != "" {
@@ -89,7 +89,7 @@ var searchCmd = &cobra.Command{
 			log.Fatal("Error during selection: %v", err)
 			return
 		}
-		
+
 		// Find the index of the selected option
 		selectedIndex := -1
 		for i, opt := range displayOptions {
@@ -98,7 +98,7 @@ var searchCmd = &cobra.Command{
 				break
 			}
 		}
-		
+
 		if selectedIndex == -1 {
 			log.Fatal("Selected option not found in options list")
 			return
@@ -114,12 +114,12 @@ var searchCmd = &cobra.Command{
 				Message: fmt.Sprintf("Would you like to open the repository URL (%s) in your browser?", selectedServer.RepositoryURL),
 				Default: true,
 			}
-			
+
 			err = survey.AskOne(confirmPrompt, &openRepo)
 			if err != nil {
 				log.Warn("Error during confirmation: %v", err)
 			}
-			
+
 			if openRepo {
 				err := openBrowser(selectedServer.RepositoryURL)
 				if err != nil {
@@ -140,7 +140,7 @@ var searchCmd = &cobra.Command{
 // openBrowser opens the specified URL in the default browser
 func openBrowser(url string) error {
 	var err error
-	
+
 	switch runtime.GOOS {
 	case "linux":
 		err = exec.Command("xdg-open", url).Start()
@@ -151,7 +151,7 @@ func openBrowser(url string) error {
 	default:
 		err = fmt.Errorf("unsupported platform")
 	}
-	
+
 	return err
 }
 
