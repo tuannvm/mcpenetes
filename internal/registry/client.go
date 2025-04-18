@@ -199,6 +199,62 @@ func FetchMCPList(url string) ([]string, error) {
 	return versions, nil
 }
 
+// FetchMCPServersWithCache fetches server information from a registry URL, using cache when available.
+// Accepts a forceRefresh parameter to bypass the cache when needed.
+func FetchMCPServersWithCache(registryURL string, forceRefresh bool) ([]ServerData, error) {
+	// Format the URL appropriately for the registry type
+	url := formatRegistryURL(registryURL)
+	
+	// Check cache first (unless forceRefresh is true)
+	if !forceRefresh {
+		cachedServers, cacheMiss, err := cache.ReadServerCache(url)
+		if err != nil {
+			// Log cache read error but proceed as if it was a miss
+			log.Warn("Failed to read server cache for %s: %v", url, err)
+		}
+		if !cacheMiss {
+			log.Detail("  Cache hit for server data from %s", url)
+			
+			// Convert cached data to ServerData format
+			servers := make([]ServerData, len(cachedServers))
+			for i, s := range cachedServers {
+				servers[i] = ServerData{
+					Name:          s.Name,
+					Description:   s.Description,
+					RepositoryURL: s.RepositoryURL,
+				}
+			}
+			return servers, nil
+		}
+		log.Info("  Server cache miss or expired for %s, fetching...", url)
+	} else {
+		log.Info("  Forcing refresh of server data from %s", url)
+	}
+	
+	// Cache miss, expiry, or forced refresh - fetch from network
+	servers, err := FetchMCPServers(url)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Convert to cache format and save to cache
+	cacheServers := make([]cache.ServerInfo, len(servers))
+	for i, s := range servers {
+		cacheServers[i] = cache.ServerInfo{
+			Name:          s.Name,
+			Description:   s.Description,
+			RepositoryURL: s.RepositoryURL,
+		}
+	}
+	
+	// Write to cache
+	if err := cache.WriteServerCache(url, cacheServers); err != nil {
+		log.Warn("Failed to write server cache for %s: %v", url, err)
+	}
+	
+	return servers, nil
+}
+
 // FetchMCPServers fetches server information from a registry URL.
 // Similar to FetchMCPList but returns ServerData objects with repository URLs.
 func FetchMCPServers(url string) ([]ServerData, error) {

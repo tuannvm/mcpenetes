@@ -29,7 +29,10 @@ var searchCmd = &cobra.Command{
 	Long: `Provides an interactive fuzzy search interface to find and select MCP versions from configured registries.
 If a server ID is provided as an argument, it will directly use that server without prompting.
 After selection, adds the server to the 'mcps' list in config.yaml.
-This determines which server configuration will be used by the 'reload' command.`,
+This determines which server configuration will be used by the 'reload' command.
+
+By default, search results are cached to improve performance. Use the --refresh flag to force a refresh
+of the cache and fetch the latest data from the registries.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow 0 or 1 argument
 		if len(args) > 1 {
@@ -41,6 +44,8 @@ This determines which server configuration will be used by the 'reload' command.
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		// Get the refresh flag value
+		forceRefresh, _ := cmd.Flags().GetBool("refresh")
 		cfg, err := config.LoadConfig()
 		if err != nil {
 			log.Fatal("Error loading config: %v", err)
@@ -80,7 +85,7 @@ This determines which server configuration will be used by the 'reload' command.
 		var displayOptions []string
 
 		for _, reg := range cfg.Registries {
-			servers, err := registry.FetchMCPServers(reg.URL)
+			servers, err := registry.FetchMCPServersWithCache(reg.URL, forceRefresh)
 			if err != nil {
 				log.Warn("Error fetching from registry %s: %v", reg.URL, err)
 				continue
@@ -205,4 +210,7 @@ func openBrowser(url string) error {
 
 func init() {
 	rootCmd.AddCommand(searchCmd)
+	
+	// Add a flag to force cache refresh
+	searchCmd.Flags().BoolP("refresh", "r", false, "Force a refresh of the cache and fetch the latest data from registries")
 }
