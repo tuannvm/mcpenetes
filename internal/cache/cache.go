@@ -64,7 +64,7 @@ var getCachePath = func(registryURL string) (string, error) {
 func ReadCache(registryURL string) (versions []string, cacheMiss bool, err error) {
 	cachePath, err := getCachePath(registryURL)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get cache path: %w", err)
+		return nil, true, fmt.Errorf("failed to get cache path: %w", err)
 	}
 
 	data, err := os.ReadFile(cachePath)
