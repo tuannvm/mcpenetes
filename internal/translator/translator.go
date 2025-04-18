@@ -210,8 +210,8 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			return fmt.Errorf("failed to marshal Claude Desktop config: %w", err)
 		}
 
-	case strings.Contains(clientName, "windsurf"):
-		// Format expected by Windsurf: using mcpServers at the top level
+	case strings.Contains(clientName, "windsurf") || strings.Contains(clientName, "cursor"):
+		// Format expected by Windsurf and Cursor: using mcpServers at the top level
 		var windsurfConfig map[string]interface{}
 
 		if configExists {
@@ -260,8 +260,8 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			return fmt.Errorf("failed to marshal Windsurf config: %w", err)
 		}
 
-	case strings.Contains(clientName, "vscode") || strings.Contains(clientName, "cursor"):
-		// VS Code and Cursor use the same format for MCP servers
+	case strings.Contains(clientName, "vscode"):
+		// VS Code format for MCP servers
 		var vscodeConfig map[string]interface{}
 
 		if configExists {
@@ -273,7 +273,7 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 		// Get or create the mcp object
 		var mcpObj map[string]interface{}
 		existingMcpObj, mcpExists := vscodeConfig["mcp"].(map[string]interface{})
-		
+
 		if mcpExists {
 			mcpObj = existingMcpObj
 		} else {
@@ -285,7 +285,7 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 		// Get or create the servers object within mcp
 		var mcpServers map[string]interface{}
 		existingServers, serversExist := mcpObj["servers"].(map[string]interface{})
-		
+
 		if serversExist {
 			mcpServers = existingServers
 		} else {
@@ -454,7 +454,7 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 	}
 
 	format := strings.ToLower(filepath.Ext(clientConfigPath))
-	
+
 	// Process based on file format
 	switch format {
 	case ".json":
@@ -471,10 +471,10 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 				// No mcpServers section, nothing to do
 				return nil
 			}
-			
+
 			// Remove servers that don't exist in the main MCP configuration
 			changed := t.removeObsoleteServers(mcpServers)
-			
+
 			if changed {
 				clientConfig["mcpServers"] = mcpServers
 				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
@@ -490,10 +490,10 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 				// No mcpServers section, nothing to do
 				return nil
 			}
-			
+
 			// Remove servers that don't exist in the main MCP configuration
 			changed := t.removeObsoleteServers(mcpServers)
-			
+
 			if changed {
 				clientConfig["mcpServers"] = mcpServers
 				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
@@ -509,16 +509,16 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 				// No mcp section, nothing to do
 				return nil
 			}
-			
+
 			servers, ok := mcpObj["servers"].(map[string]interface{})
 			if !ok {
 				// No servers section, nothing to do
 				return nil
 			}
-			
+
 			// Remove servers that don't exist in the main MCP configuration
 			changed := t.removeObsoleteServers(servers)
-			
+
 			if changed {
 				mcpObj["servers"] = servers
 				clientConfig["mcp"] = mcpObj
@@ -536,10 +536,10 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 				// No mcpServers section, nothing to do
 				return nil
 			}
-			
+
 			// Remove servers that don't exist in the main MCP configuration
 			changed := t.removeObsoleteServers(mcpServers)
-			
+
 			if changed {
 				clientConfig["mcpServers"] = mcpServers
 				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
@@ -554,7 +554,7 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 	// For now, only JSON format is fully implemented
 	case ".yaml", ".yml", ".toml":
 		fmt.Printf("  Warning: Removing servers from %s format not fully implemented for %s\n", format, clientName)
-	
+
 	default:
 		return fmt.Errorf("unsupported config format '%s' for client %s", format, clientName)
 	}
@@ -578,6 +578,6 @@ func (t *Translator) removeObsoleteServers(servers map[string]interface{}) bool 
 			changed = true
 		}
 	}
-	
+
 	return changed
 }

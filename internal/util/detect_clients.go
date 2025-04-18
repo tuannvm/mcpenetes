@@ -52,13 +52,8 @@ func DetectMCPClients() (map[string]config.Client, error) {
 			// Cursor
 			{
 				Name:       "cursor",
-				ConfigDir:  filepath.Join(homeDir, "Library", "Application Support", "Cursor", "User"),
-				ConfigFile: "settings.json",
-			},
-			{
-				Name:       "cursor-legacy",
 				ConfigDir:  filepath.Join(homeDir, ".cursor"),
-				ConfigFile: "settings.json",
+				ConfigFile: "mcp.json",
 			},
 			// Claude Desktop (exact path from documentation)
 			{
@@ -134,7 +129,7 @@ func DetectMCPClients() (map[string]config.Client, error) {
 			{
 				Name:       "cursor",
 				ConfigDir:  filepath.Join(appData, "Cursor", "User"),
-				ConfigFile: "settings.json",
+				ConfigFile: "mcp.json",
 			},
 			// Claude Desktop (exact path from documentation)
 			{
