@@ -211,8 +211,7 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 		}
 
 	case strings.Contains(clientName, "windsurf"):
-		// Format expected by Windsurf: structure not fully documented
-		// Based on documentation sample, create a similar structure for Windsurf
+		// Format expected by Windsurf: using mcpServers at the top level
 		var windsurfConfig map[string]interface{}
 
 		if configExists {
@@ -221,15 +220,15 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			windsurfConfig = make(map[string]interface{})
 		}
 
-		// For Windsurf, we'll use the existing format but ensure we add/update servers
-		if _, ok := windsurfConfig["servers"]; !ok {
-			windsurfConfig["servers"] = make(map[string]interface{})
+		// For Windsurf, we'll use the mcpServers key at the top level
+		if _, ok := windsurfConfig["mcpServers"]; !ok {
+			windsurfConfig["mcpServers"] = make(map[string]interface{})
 		}
 
-		servers, ok := windsurfConfig["servers"].(map[string]interface{})
+		mcpServers, ok := windsurfConfig["mcpServers"].(map[string]interface{})
 		if !ok {
-			// If the servers key exists but is not a map, create a new one
-			servers = make(map[string]interface{})
+			// If the mcpServers key exists but is not a map, create a new one
+			mcpServers = make(map[string]interface{})
 		}
 
 		// Create or update server entry
@@ -252,8 +251,8 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 		}
 
 		// Add/update the server in the map
-		servers[serverID] = serverEntry
-		windsurfConfig["servers"] = servers
+		mcpServers[serverID] = serverEntry
+		windsurfConfig["mcpServers"] = mcpServers
 
 		// Marshal the updated config
 		outputData, err = json.MarshalIndent(windsurfConfig, "", "  ")
@@ -486,17 +485,17 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 			}
 
 		case strings.Contains(clientName, "windsurf"):
-			servers, ok := clientConfig["servers"].(map[string]interface{})
+			mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{})
 			if !ok {
-				// No servers section, nothing to do
+				// No mcpServers section, nothing to do
 				return nil
 			}
 			
 			// Remove servers that don't exist in the main MCP configuration
-			changed := t.removeObsoleteServers(servers)
+			changed := t.removeObsoleteServers(mcpServers)
 			
 			if changed {
-				clientConfig["servers"] = servers
+				clientConfig["mcpServers"] = mcpServers
 				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
 				if err != nil {
 					return fmt.Errorf("failed to marshal updated Windsurf config: %w", err)
