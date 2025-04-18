@@ -80,42 +80,34 @@ This command requires confirmation before proceeding.`,
 		}
 		clientNames = append(clientNames, "ALL") // Add option to select all clients
 
-		// Let user choose which clients to apply to
-		var selectedClients []string
-		clientPrompt := &survey.MultiSelect{
-			Message: "Select clients to apply MCP configuration to:",
+		// Let user choose which client to apply to (only one selection allowed)
+		var selectedClient string
+		clientPrompt := &survey.Select{
+			Message: "Select client to apply MCP configuration to:",
 			Options: clientNames,
-			Default: []string{"ALL"}, // Default to ALL
+			Default: "ALL", // Default to ALL
 		}
-		
-		// Use AskOne without a custom transformer (simpler approach)
-		err = survey.AskOne(clientPrompt, &selectedClients, survey.WithValidator(survey.Required))
+
+		// Use AskOne with single selection
+		err = survey.AskOne(clientPrompt, &selectedClient, survey.WithValidator(survey.Required))
 		if err != nil {
 			log.Fatal("Error during client selection: %v", err)
 		}
-		
-		// Process selections
-		applyToAllClients := false
-		for _, c := range selectedClients {
-			if c == "ALL" {
-				applyToAllClients = true
-				break
-			}
-		}
-		
+
+		// Process selection
+		applyToAllClients := selectedClient == "ALL"
+
 		// Create a filtered client map
 		selectedClientMap := make(map[string]config.Client)
 		if applyToAllClients {
 			selectedClientMap = cfg.Clients // Use all clients
 		} else {
-			// Only include selected clients
-			for _, name := range selectedClients {
-				if client, ok := cfg.Clients[name]; ok {
-					selectedClientMap[name] = client
-				}
+			// Only include the single selected client
+			if client, ok := cfg.Clients[selectedClient]; ok {
+				selectedClientMap[selectedClient] = client
 			}
 		}
-		
+
 		if len(selectedClientMap) == 0 {
 			log.Warn("No clients selected. Nothing to apply.")
 			return
@@ -188,6 +180,14 @@ This command requires confirmation before proceeding.`,
 					log.Success("    Successfully applied server %s to client %s", serverName, clientName)
 					totalOperations++
 				}
+			}
+
+			// Remove servers that no longer exist in the MCP configuration
+			log.Printf(log.InfoColor, "  - Checking for obsolete servers\n")
+			err = trans.RemoveClientServers(clientName, clientConf)
+			if err != nil {
+				log.Error("    Error removing obsolete servers from client %s: %v", clientName, err)
+				clientSuccess = false
 			}
 
 			if clientSuccess {

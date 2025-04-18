@@ -93,6 +93,7 @@ func (t *Translator) BackupClientConfig(clientName string, clientConf config.Cli
 }
 
 // TranslateAndApply translates the selected MCP config and writes it to the client's path.
+// If serverConf is nil, it will remove the server from the client's configuration.
 func (t *Translator) TranslateAndApply(clientName string, clientConf config.Client, serverConf config.MCPServer) error {
 	clientConfigPath, err := util.ExpandPath(clientConf.ConfigPath)
 	if err != nil {
@@ -270,10 +271,25 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			vscodeConfig = make(map[string]interface{})
 		}
 
-		// Get or create the mcp.servers object
-		mcpServers, ok := vscodeConfig["mcp.servers"].(map[string]interface{})
-		if !ok {
-			// If mcp.servers doesn't exist or isn't a map, create it
+		// Get or create the mcp object
+		var mcpObj map[string]interface{}
+		existingMcpObj, mcpExists := vscodeConfig["mcp"].(map[string]interface{})
+		
+		if mcpExists {
+			mcpObj = existingMcpObj
+		} else {
+			mcpObj = make(map[string]interface{})
+			// Initialize inputs as empty array if it doesn't exist
+			mcpObj["inputs"] = []interface{}{}
+		}
+
+		// Get or create the servers object within mcp
+		var mcpServers map[string]interface{}
+		existingServers, serversExist := mcpObj["servers"].(map[string]interface{})
+		
+		if serversExist {
+			mcpServers = existingServers
+		} else {
 			mcpServers = make(map[string]interface{})
 		}
 
@@ -288,9 +304,12 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			serverEntry["args"] = serverConf.Args
 		}
 
-		// VSCode format doesn't seem to include env vars in standard format
+		// VSCode format includes env vars
 		if len(serverConf.Env) > 0 {
 			serverEntry["env"] = serverConf.Env
+		} else {
+			// Ensure env is included even if empty
+			serverEntry["env"] = make(map[string]string)
 		}
 
 		if serverConf.URL != "" {
@@ -299,7 +318,8 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 
 		// Add/update the server in the map
 		mcpServers[serverID] = serverEntry
-		vscodeConfig["mcp.servers"] = mcpServers
+		mcpObj["servers"] = mcpServers
+		vscodeConfig["mcp"] = mcpObj
 
 		// Marshal the updated config
 		outputData, err = json.MarshalIndent(vscodeConfig, "", "  ")
@@ -407,5 +427,158 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 	return nil
 }
 
-// TODO: Implement backup retention cleanup
-// func (t *Translator) CleanupBackups() error { ... }
+// RemoveClientServers removes servers from client configurations that no longer exist in the main MCP configuration
+func (t *Translator) RemoveClientServers(clientName string, clientConf config.Client) error {
+	clientConfigPath, err := util.ExpandPath(clientConf.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to expand client config path '%s' for %s: %w", clientConf.ConfigPath, clientName, err)
+	}
+
+	// Check if client config file exists
+	_, err = os.Stat(clientConfigPath)
+	if os.IsNotExist(err) {
+		// File doesn't exist, nothing to remove
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("failed to stat client config file '%s': %w", clientConfigPath, err)
+	}
+
+	// Read the client config file
+	clientConfigData, err := os.ReadFile(clientConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to read client config file '%s': %w", clientConfigPath, err)
+	}
+
+	// If file is empty, nothing to do
+	if len(clientConfigData) == 0 {
+		return nil
+	}
+
+	format := strings.ToLower(filepath.Ext(clientConfigPath))
+	
+	// Process based on file format
+	switch format {
+	case ".json":
+		var clientConfig map[string]interface{}
+		if err := json.Unmarshal(clientConfigData, &clientConfig); err != nil {
+			return fmt.Errorf("failed to parse client JSON config file '%s': %w", clientConfigPath, err)
+		}
+
+		// Handle different client formats
+		switch {
+		case strings.Contains(clientName, "claude-desktop"):
+			mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{})
+			if !ok {
+				// No mcpServers section, nothing to do
+				return nil
+			}
+			
+			// Remove servers that don't exist in the main MCP configuration
+			changed := t.removeObsoleteServers(mcpServers)
+			
+			if changed {
+				clientConfig["mcpServers"] = mcpServers
+				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal updated Claude Desktop config: %w", err)
+				}
+				return os.WriteFile(clientConfigPath, outputData, 0644)
+			}
+
+		case strings.Contains(clientName, "windsurf"):
+			servers, ok := clientConfig["servers"].(map[string]interface{})
+			if !ok {
+				// No servers section, nothing to do
+				return nil
+			}
+			
+			// Remove servers that don't exist in the main MCP configuration
+			changed := t.removeObsoleteServers(servers)
+			
+			if changed {
+				clientConfig["servers"] = servers
+				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal updated Windsurf config: %w", err)
+				}
+				return os.WriteFile(clientConfigPath, outputData, 0644)
+			}
+
+		case strings.Contains(clientName, "vscode") || strings.Contains(clientName, "cursor"):
+			mcpObj, ok := clientConfig["mcp"].(map[string]interface{})
+			if !ok {
+				// No mcp section, nothing to do
+				return nil
+			}
+			
+			servers, ok := mcpObj["servers"].(map[string]interface{})
+			if !ok {
+				// No servers section, nothing to do
+				return nil
+			}
+			
+			// Remove servers that don't exist in the main MCP configuration
+			changed := t.removeObsoleteServers(servers)
+			
+			if changed {
+				mcpObj["servers"] = servers
+				clientConfig["mcp"] = mcpObj
+				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal updated VS Code/Cursor config: %w", err)
+				}
+				return os.WriteFile(clientConfigPath, outputData, 0644)
+			}
+
+		default:
+			// For unknown clients with JSON format
+			mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{})
+			if !ok {
+				// No mcpServers section, nothing to do
+				return nil
+			}
+			
+			// Remove servers that don't exist in the main MCP configuration
+			changed := t.removeObsoleteServers(mcpServers)
+			
+			if changed {
+				clientConfig["mcpServers"] = mcpServers
+				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal updated generic JSON config: %w", err)
+				}
+				return os.WriteFile(clientConfigPath, outputData, 0644)
+			}
+		}
+
+	// For YAML and TOML formats, we would handle similarly but with their respective formats
+	// For now, only JSON format is fully implemented
+	case ".yaml", ".yml", ".toml":
+		fmt.Printf("  Warning: Removing servers from %s format not fully implemented for %s\n", format, clientName)
+	
+	default:
+		return fmt.Errorf("unsupported config format '%s' for client %s", format, clientName)
+	}
+
+	return nil
+}
+
+// removeObsoleteServers removes server entries from a client config map that don't exist in the MCPConfig
+// and returns whether any changes were made
+func (t *Translator) removeObsoleteServers(servers map[string]interface{}) bool {
+	if len(servers) == 0 {
+		return false
+	}
+
+	changed := false
+	for serverID := range servers {
+		// Check if this server exists in the main MCP configuration
+		if _, exists := t.MCPConfig.MCPServers[serverID]; !exists {
+			delete(servers, serverID)
+			fmt.Printf("  Removed obsolete server '%s' from client configuration\n", serverID)
+			changed = true
+		}
+	}
+	
+	return changed
+}
