@@ -45,7 +45,7 @@ func getConfigPaths() (configFilePath, mcpFilePath string, err error) {
 // GetDefaultConfig returns the default configuration structure.
 func GetDefaultConfig() *Config {
 	// Define default values here
-	configDir, _ := getConfigDir() // Ignore error for default path generation
+	configDir, _ := getConfigDir()            // Ignore error for default path generation
 	backupPath := "~/.config/mcpetes/backups" // Default string
 	if configDir != "" {
 		backupPath = filepath.Join(configDir, "backups")
@@ -53,8 +53,13 @@ func GetDefaultConfig() *Config {
 
 	return &Config{
 		SelectedMCP: "", // No default selection initially
-		Registries:  []Registry{},
-		Clients:     make(map[string]Client),
+		Registries: []Registry{
+			{
+				Name: "glama",
+				URL:  "https://glama.ai/api/mcp/v1/servers",
+			},
+		},
+		Clients: make(map[string]Client),
 		Backups: BackupConfig{
 			Path: backupPath,
 		},
@@ -92,8 +97,9 @@ func LoadConfig() (*Config, error) {
 	if cfg.Clients == nil {
 		cfg.Clients = make(map[string]Client)
 	}
-	if cfg.Registries == nil {
-		cfg.Registries = []Registry{}
+	if len(cfg.Registries) == 0 {
+		// Populate default registries if none are configured
+		cfg.Registries = GetDefaultConfig().Registries
 	}
 
 	return &cfg, nil

@@ -45,7 +45,7 @@ func TestGetCachePath(t *testing.T) {
 		},
 		{
 			name:           "Invalid URL format (no scheme/host)", // Adjusted description
-			registryURL:    "nodomain",                          // Changed to a more realistic invalid format case
+			registryURL:    "nodomain",                            // Changed to a more realistic invalid format case
 			wantErr:        true,
 			expectedBaseFn: "",
 		},
@@ -60,7 +60,7 @@ func TestGetCachePath(t *testing.T) {
 	// Temporarily override cacheDirPath for predictable test paths
 	originalCacheDirPath := cacheDirPath
 	testBaseDir := t.TempDir() // Use a test-specific temp dir for the base
-	cacheDirPath = testBaseDir  // Set the global variable used by the real getCachePath
+	cacheDirPath = testBaseDir // Set the global variable used by the real getCachePath
 	defer func() {
 		cacheDirPath = originalCacheDirPath // Restore original cacheDirPath
 	}()
@@ -172,7 +172,7 @@ func TestReadCache(t *testing.T) {
 			},
 			registryURL:   "https://example.com/nonexistent.json",
 			wantVersions:  nil,
-			wantCacheMiss: true, // Cache miss because file doesn't exist
+			wantCacheMiss: true,  // Cache miss because file doesn't exist
 			wantErr:       false, // os.IsNotExist errors are handled as cache misses, not errors
 		},
 		{
@@ -189,7 +189,7 @@ func TestReadCache(t *testing.T) {
 			},
 			registryURL:   "https://example.com/invalid.json",
 			wantVersions:  nil,
-			wantCacheMiss: true, // Cache miss due to unmarshal error
+			wantCacheMiss: true,  // Cache miss due to unmarshal error
 			wantErr:       false, // Unmarshal errors are handled as cache misses, not errors
 		},
 		{
@@ -201,7 +201,7 @@ func TestReadCache(t *testing.T) {
 			registryURL:   "://force-error", // Invalid URL to make getCachePath error
 			wantVersions:  nil,
 			wantCacheMiss: true, // Treat getCachePath error as a cache miss scenario for simplicity
-			wantErr:       true,  // Expect the underlying error from getCachePath
+			wantErr:       true, // Expect the underlying error from getCachePath
 		},
 	}
 

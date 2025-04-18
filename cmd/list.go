@@ -40,7 +40,7 @@ var listCmd = &cobra.Command{
 
 		// Use a map to store results, keyed by registry name
 		mcpLists := make(map[string][]string)
-		var mu sync.Mutex // Mutex to protect concurrent map writes
+		var mu sync.Mutex     // Mutex to protect concurrent map writes
 		var wg sync.WaitGroup // WaitGroup to wait for all fetches to complete
 
 		for _, reg := range cfg.Registries {
@@ -60,7 +60,7 @@ var listCmd = &cobra.Command{
 		}
 
 		wg.Wait() // Wait for all goroutines to finish
-		s.Stop() // Stop spinner
+		s.Stop()  // Stop spinner
 
 		// Now print any errors that occurred during fetch
 		for name, versions := range mcpLists {
