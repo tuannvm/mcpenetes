@@ -101,33 +101,295 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 
 	fmt.Printf("  Translating config for %s ('%s')...\n", clientName, clientConfigPath)
 
-	// Determine the target format based on the client or file extension
+	// Find the server ID (key) from the MCPConfig map by matching the server config
+	serverID := ""
+	for id, server := range t.MCPConfig.MCPServers {
+		// Compare the relevant fields to find a match
+		if server.Command == serverConf.Command &&
+			server.URL == serverConf.URL &&
+			fmt.Sprintf("%v", server.Args) == fmt.Sprintf("%v", serverConf.Args) &&
+			fmt.Sprintf("%v", server.Env) == fmt.Sprintf("%v", serverConf.Env) {
+			serverID = id
+			break
+		}
+	}
+
+	if serverID == "" {
+		// Fallback: generate a server ID based on command or URL
+		if serverConf.Command != "" {
+			serverID = strings.Split(serverConf.Command, " ")[0]
+		} else if serverConf.URL != "" {
+			// Extract domain from URL
+			parts := strings.Split(strings.TrimPrefix(strings.TrimPrefix(serverConf.URL, "https://"), "http://"), "/")
+			if len(parts) > 0 {
+				serverID = parts[0]
+			} else {
+				serverID = "mcp-server"
+			}
+		} else {
+			serverID = "mcp-server"
+		}
+	}
+
+	// Determine how to format the config based on client name and file extension
+	var outputData []byte
 	format := strings.ToLower(filepath.Ext(clientConfigPath))
 
-	var outputData []byte
+	// Check if the file already exists to determine if we need to merge with existing config
+	existingConfig := make(map[string]interface{})
+	existingFile, err := os.ReadFile(clientConfigPath)
+	var configExists bool = false
+	if err == nil && len(existingFile) > 0 {
+		configExists = true
+		err = json.Unmarshal(existingFile, &existingConfig)
+		if err != nil {
+			// File exists but isn't valid JSON, we'll just overwrite it
+			configExists = false
+		}
+	}
 
-	switch format {
-	case ".json":
-		// Assume client wants the exact MCPServer structure for now
-		outputData, err = json.MarshalIndent(serverConf, "", "  ")
+	// Prepare the server configuration based on client type
+	switch {
+	case strings.Contains(clientName, "claude-desktop"):
+		// Format expected by Claude Desktop: {"mcpServers": {"server-id": {...server config...}}}
+		var claudeConfig map[string]interface{}
+
+		if configExists {
+			claudeConfig = existingConfig
+		} else {
+			claudeConfig = make(map[string]interface{})
+			claudeConfig["mcpServers"] = make(map[string]interface{})
+		}
+
+		// Check if mcpServers map exists
+		mcpServers, ok := claudeConfig["mcpServers"].(map[string]interface{})
+		if !ok {
+			// Initialize or reset the mcpServers map if it doesn't exist or has wrong type
+			mcpServers = make(map[string]interface{})
+		}
+
+		// Create a server entry for Claude Desktop format
+		serverEntry := make(map[string]interface{})
+
+		// Copy the basic server properties
+		if serverConf.Command != "" {
+			serverEntry["command"] = serverConf.Command
+		}
+
+		if len(serverConf.Args) > 0 {
+			serverEntry["args"] = serverConf.Args
+		}
+
+		if len(serverConf.Env) > 0 {
+			serverEntry["env"] = serverConf.Env
+		}
+
+		if serverConf.URL != "" {
+			serverEntry["url"] = serverConf.URL
+		}
+
+		// Include disabled and autoApprove fields if they're set
+		if serverConf.Disabled {
+			serverEntry["disabled"] = serverConf.Disabled
+		}
+
+		if len(serverConf.AutoApprove) > 0 {
+			serverEntry["autoApprove"] = serverConf.AutoApprove
+		} else {
+			serverEntry["autoApprove"] = []string{}
+		}
+
+		// Add/update the server in the map
+		mcpServers[serverID] = serverEntry
+		claudeConfig["mcpServers"] = mcpServers
+
+		// Marshal the updated config
+		outputData, err = json.MarshalIndent(claudeConfig, "", "  ")
 		if err != nil {
-			return fmt.Errorf("failed to marshal config to JSON for %s: %w", clientName, err)
+			return fmt.Errorf("failed to marshal Claude Desktop config: %w", err)
 		}
-	case ".yaml", ".yml":
-		// Assume client wants the exact MCPServer structure for now
-		outputData, err = yaml.Marshal(serverConf)
+
+	case strings.Contains(clientName, "windsurf"):
+		// Format expected by Windsurf: structure not fully documented
+		// Based on documentation sample, create a similar structure for Windsurf
+		var windsurfConfig map[string]interface{}
+
+		if configExists {
+			windsurfConfig = existingConfig
+		} else {
+			windsurfConfig = make(map[string]interface{})
+		}
+
+		// For Windsurf, we'll use the existing format but ensure we add/update servers
+		if _, ok := windsurfConfig["servers"]; !ok {
+			windsurfConfig["servers"] = make(map[string]interface{})
+		}
+
+		servers, ok := windsurfConfig["servers"].(map[string]interface{})
+		if !ok {
+			// If the servers key exists but is not a map, create a new one
+			servers = make(map[string]interface{})
+		}
+
+		// Create or update server entry
+		serverEntry := make(map[string]interface{})
+
+		if serverConf.Command != "" {
+			serverEntry["command"] = serverConf.Command
+		}
+
+		if len(serverConf.Args) > 0 {
+			serverEntry["args"] = serverConf.Args
+		}
+
+		if len(serverConf.Env) > 0 {
+			serverEntry["env"] = serverConf.Env
+		}
+
+		if serverConf.URL != "" {
+			serverEntry["url"] = serverConf.URL
+		}
+
+		// Add/update the server in the map
+		servers[serverID] = serverEntry
+		windsurfConfig["servers"] = servers
+
+		// Marshal the updated config
+		outputData, err = json.MarshalIndent(windsurfConfig, "", "  ")
 		if err != nil {
-			return fmt.Errorf("failed to marshal config to YAML for %s: %w", clientName, err)
+			return fmt.Errorf("failed to marshal Windsurf config: %w", err)
 		}
-	case ".toml":
-		// Assume client wants the exact MCPServer structure for now
-		buf := new(bytes.Buffer)
-		if err := toml.NewEncoder(buf).Encode(serverConf); err != nil {
-			return fmt.Errorf("failed to marshal config to TOML for %s: %w", clientName, err)
+
+	case strings.Contains(clientName, "vscode") || strings.Contains(clientName, "cursor"):
+		// VS Code and Cursor use the same format for MCP servers
+		var vscodeConfig map[string]interface{}
+
+		if configExists {
+			vscodeConfig = existingConfig
+		} else {
+			vscodeConfig = make(map[string]interface{})
 		}
-		outputData = buf.Bytes()
+
+		// Get or create the mcp.servers object
+		mcpServers, ok := vscodeConfig["mcp.servers"].(map[string]interface{})
+		if !ok {
+			// If mcp.servers doesn't exist or isn't a map, create it
+			mcpServers = make(map[string]interface{})
+		}
+
+		// Create or update the server config
+		serverEntry := make(map[string]interface{})
+
+		if serverConf.Command != "" {
+			serverEntry["command"] = serverConf.Command
+		}
+
+		if len(serverConf.Args) > 0 {
+			serverEntry["args"] = serverConf.Args
+		}
+
+		// VSCode format doesn't seem to include env vars in standard format
+		if len(serverConf.Env) > 0 {
+			serverEntry["env"] = serverConf.Env
+		}
+
+		if serverConf.URL != "" {
+			serverEntry["url"] = serverConf.URL
+		}
+
+		// Add/update the server in the map
+		mcpServers[serverID] = serverEntry
+		vscodeConfig["mcp.servers"] = mcpServers
+
+		// Marshal the updated config
+		outputData, err = json.MarshalIndent(vscodeConfig, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal VS Code/Cursor config: %w", err)
+		}
+
 	default:
-		return fmt.Errorf("unsupported config format '%s' for client %s", format, clientName)
+		// For unknown clients, use a generic approach based on file extension
+		switch format {
+		case ".json":
+			// If we don't know the client, use a standard format that matches our internal structure
+			// Our standard format uses mcpServers map like our current config
+			var genericConfig map[string]interface{}
+
+			if configExists {
+				genericConfig = existingConfig
+			} else {
+				genericConfig = make(map[string]interface{})
+			}
+
+			// Get or create the mcpServers map
+			mcpServers, ok := genericConfig["mcpServers"].(map[string]interface{})
+			if !ok {
+				mcpServers = make(map[string]interface{})
+			}
+
+			// Convert serverConf to a map to add to mcpServers
+			serverMap := make(map[string]interface{})
+
+			if serverConf.Command != "" {
+				serverMap["command"] = serverConf.Command
+			}
+
+			if len(serverConf.Args) > 0 {
+				serverMap["args"] = serverConf.Args
+			}
+
+			if len(serverConf.Env) > 0 {
+				serverMap["env"] = serverConf.Env
+			}
+
+			if serverConf.URL != "" {
+				serverMap["url"] = serverConf.URL
+			}
+
+			// Add disabled and autoApprove fields if they're set
+			if serverConf.Disabled {
+				serverMap["disabled"] = serverConf.Disabled
+			}
+
+			if len(serverConf.AutoApprove) > 0 {
+				serverMap["autoApprove"] = serverConf.AutoApprove
+			} else {
+				serverMap["autoApprove"] = []string{}
+			}
+
+			// Add the server to the map
+			mcpServers[serverID] = serverMap
+			genericConfig["mcpServers"] = mcpServers
+
+			outputData, err = json.MarshalIndent(genericConfig, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal generic JSON config: %w", err)
+			}
+
+		case ".yaml", ".yml":
+			// Create a map for the server with its ID as key
+			serverMap := make(map[string]config.MCPServer)
+			serverMap[serverID] = serverConf
+
+			outputData, err = yaml.Marshal(serverMap)
+			if err != nil {
+				return fmt.Errorf("failed to marshal config to YAML for %s: %w", clientName, err)
+			}
+
+		case ".toml":
+			// Create a map for the server with its ID as key
+			serverMap := make(map[string]config.MCPServer)
+			serverMap[serverID] = serverConf
+
+			buf := new(bytes.Buffer)
+			if err := toml.NewEncoder(buf).Encode(serverMap); err != nil {
+				return fmt.Errorf("failed to marshal config to TOML for %s: %w", clientName, err)
+			}
+			outputData = buf.Bytes()
+
+		default:
+			return fmt.Errorf("unsupported config format '%s' for client %s", format, clientName)
+		}
 	}
 
 	// Ensure the target directory exists

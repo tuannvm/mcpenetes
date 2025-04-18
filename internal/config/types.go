@@ -32,12 +32,13 @@ type MCPConfig struct {
 }
 
 // MCPServer defines the configuration for a single MCP server
-// Note: The exact structure for MCPServer is not fully defined in the README's mcp.json example.
-// We'll need to define this based on what information needs to be translated for clients.
-// For now, let's add some placeholder fields.
+// According to the schema, it must have either command or url,
+// and can optionally have args and env
 type MCPServer struct {
 	Command     string            `json:"command,omitempty"`
 	Args        []string          `json:"args,omitempty"`
-	Environment map[string]string `json:"environment,omitempty"`
-	// Add other necessary fields based on client requirements
+	URL         string            `json:"url,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	Disabled    bool              `json:"disabled,omitempty"`
+	AutoApprove []string          `json:"autoApprove,omitempty"`
 }
