@@ -95,8 +95,8 @@ func TestSaveConfig(t *testing.T) {
 	savePath := filepath.Join(tempDir, "test_config_save.yaml")
 
 	configToSave := &Config{
-		Version: 1,
-		MCPs: []string{"server-b"},
+		Version:    1,
+		MCPs:       []string{"server-b"},
 		Registries: []Registry{{Name: "local", URL: "file:///tmp/index.json"}},
 		Clients:    map[string]Client{"vscode": {ConfigPath: "~/.config/Code/User/settings.json"}},
 		Backups:    BackupConfig{Path: "/tmp/mcpetes_backups"},
