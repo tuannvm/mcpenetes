@@ -17,7 +17,7 @@ import (
 var useCmd = &cobra.Command{
 	Use:   "use [server-id]",
 	Short: "Selects the active MCP server configuration, interactively if no ID is provided.",
-	Long: `Sets the 'selected_mcp' value in config.yaml to the provided server ID.
+	Long: `Adds the provided server ID to the 'mcps' list in config.yaml.
 If no server ID is provided as an argument, it fetches all available servers
 (from registries and local mcp.json) and presents an interactive selection prompt.
 This determines which server configuration from mcp.json will be used by the 'reload' command.`,
@@ -60,8 +60,8 @@ This determines which server configuration from mcp.json will be used by the 're
 			}
 
 			prompt := &survey.Select{
-				Message: "Choose an MCP server to use:",
-				Options: choices,
+				Message:  "Choose an MCP server to use:",
+				Options:  choices,
 				PageSize: 15, // Adjust as needed
 			}
 			err = survey.AskOne(prompt, &serverID)
@@ -76,11 +76,22 @@ This determines which server configuration from mcp.json will be used by the 're
 			return
 		}
 
-		// --- Save the selected server ID --- 
-		fmt.Printf("Setting active MCP server to: %s\n", serverID)
+		// --- Save the selected server ID ---
+		fmt.Printf("Adding MCP server to list: %s\n", serverID)
 
-		// Update the selected MCP in the already loaded config
-		cfg.SelectedMCP = serverID
+		// Update the MCPs list in the already loaded config
+		// Check if the MCP is already in the list to avoid duplicates
+		alreadyExists := false
+		for _, mcp := range cfg.MCPs {
+			if mcp == serverID {
+				alreadyExists = true
+				break
+			}
+		}
+
+		if !alreadyExists {
+			cfg.MCPs = append(cfg.MCPs, serverID)
+		}
 
 		// Save the updated config
 		if err := config.SaveConfig(cfg); err != nil {
@@ -88,7 +99,7 @@ This determines which server configuration from mcp.json will be used by the 're
 			os.Exit(1)
 		}
 
-		fmt.Printf("Successfully set active MCP to '%s'. Run 'mcpetes reload' to apply.\n", serverID)
+		fmt.Printf("Successfully added MCP '%s' to the list. Run 'mcpetes reload' to apply.\n", serverID)
 	},
 }
 

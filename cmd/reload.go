@@ -27,8 +27,8 @@ var reloadCmd = &cobra.Command{
 			log.Fatal("Error loading config.yaml: %v", err)
 		}
 
-		if cfg.SelectedMCP == "" {
-			log.Fatal("No MCP server selected. Use 'mcpetes use <server-id>' first.")
+		if len(cfg.MCPs) == 0 {
+			log.Fatal("No MCP servers selected. Use 'mcpetes use <server-id>' first.")
 		}
 
 		mcpCfg, err := config.LoadMCPConfig()
@@ -36,12 +36,13 @@ var reloadCmd = &cobra.Command{
 			log.Fatal("Error loading mcp.json: %v", err)
 		}
 
-		// 2. Find the selected server configuration
-		selectedServerConf, found := mcpCfg.MCPServers[cfg.SelectedMCP]
+		// 2. Find the selected server configuration (using the first one in the list)
+		selectedMCP := cfg.MCPs[0]
+		selectedServerConf, found := mcpCfg.MCPServers[selectedMCP]
 		if !found {
-			log.Fatal("Selected MCP server '%s' not found in mcp.json.", cfg.SelectedMCP)
+			log.Fatal("Selected MCP server '%s' not found in mcp.json.", selectedMCP)
 		}
-		log.Info("Applying configuration for server: %s", cfg.SelectedMCP)
+		log.Info("Applying configuration for server: %s", selectedMCP)
 
 		// 3. Create Translator
 		trans := translator.NewTranslator(cfg, mcpCfg)

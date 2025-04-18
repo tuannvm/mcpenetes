@@ -50,20 +50,11 @@ type RegistryIndex struct {
 	} `json:"servers,omitempty"`
 }
 
-// formatRegistryURL ensures the registry URL is properly formatted for the specific registry type
-func formatRegistryURL(url string) string {
-	// Handle Glama API URLs
-	if match, _ := regexp.MatchString(`^https?://glama\.ai(/.*)?$`, url); match {
-		// If it's a Glama URL, ensure it points to the API endpoint
-		baseURL := "https://glama.ai/api/mcp/v1/servers"
-		// If additional query parameters were provided, preserve them
-		if strings.Contains(url, "?") {
-			parts := strings.SplitN(url, "?", 2)
-			return baseURL + "?" + parts[1]
-		}
-		return baseURL
-	}
-	return url
+// ServerData represents information about an MCP server
+type ServerData struct {
+	Name          string
+	Description   string
+	RepositoryURL string
 }
 
 // FetchMCPList fetches the list of available MCP versions from a given registry URL.
@@ -186,11 +177,7 @@ func FetchMCPList(url string) ([]string, error) {
 
 			// Add servers from this page
 			for _, server := range nextPage.Servers {
-				serverInfo := server.Name
-				if server.Description != "" {
-					serverInfo = fmt.Sprintf("%s (%s)", server.Name, server.Description)
-				}
-				versions = append(versions, serverInfo)
+				versions = append(versions, fmt.Sprintf("%s: %s", server.Name, server.Description))
 			}
 
 			// Update cursor for next page
@@ -210,4 +197,168 @@ func FetchMCPList(url string) ([]string, error) {
 	}
 
 	return versions, nil
+}
+
+// FetchMCPServers fetches server information from a registry URL.
+// Similar to FetchMCPList but returns ServerData objects with repository URLs.
+func FetchMCPServers(url string) ([]ServerData, error) {
+	// Format the URL appropriately for the registry type
+	url = formatRegistryURL(url)
+
+	// We'll skip the cache for this function since we need detailed server data
+
+	// Proceed with HTTP fetch
+	client := &http.Client{
+		Timeout: 10 * time.Second, // Add a timeout to prevent hanging indefinitely
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for %s: %w", url, err)
+	}
+	req.Header.Set("User-Agent", "mcpetes-cli/0.0.1")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch from %s: received status code %d", url, resp.StatusCode)
+	}
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body from %s: %w", url, err)
+	}
+
+	var index RegistryIndex
+	if err := json.Unmarshal(body, &index); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON from %s: %w", url, err)
+	}
+
+	// Extract server data based on the response format
+	var servers []ServerData
+
+	if len(index.Versions) > 0 {
+		// Direct versions format - no repository URLs available
+		for _, version := range index.Versions {
+			servers = append(servers, ServerData{
+				Name:          version,
+				Description:   "",
+				RepositoryURL: "",
+			})
+		}
+	} else if len(index.SmitheryServers) > 0 {
+		// Smithery API format - extract server info
+		for _, server := range index.SmitheryServers {
+			name := server.DisplayName
+			if name == "" {
+				name = server.QualifiedName
+			}
+
+			servers = append(servers, ServerData{
+				Name:          name,
+				Description:   server.Version,
+				RepositoryURL: "", // No repository URL in Smithery format
+			})
+		}
+	} else if index.Servers != nil {
+		// Glama API format - handle pagination
+		for _, server := range index.Servers {
+			repoURL := ""
+			if server.Repository.URL != "" {
+				repoURL = server.Repository.URL
+			}
+
+			servers = append(servers, ServerData{
+				Name:          server.Name,
+				Description:   server.Description,
+				RepositoryURL: repoURL,
+			})
+		}
+
+		// If there are more pages, fetch them
+		cursor := index.PageInfo.EndCursor
+		for index.PageInfo.HasNextPage {
+			// Construct URL with cursor
+			paginatedURL := url
+			if cursor != "" {
+				if !strings.Contains(paginatedURL, "?") {
+					paginatedURL += "?"
+				} else if !strings.HasSuffix(paginatedURL, "?") && !strings.HasSuffix(paginatedURL, "&") {
+					paginatedURL += "&"
+				}
+				paginatedURL += fmt.Sprintf("after=%s&first=100", cursor)
+			}
+
+			// Fetch next page
+			req, err := http.NewRequest("GET", paginatedURL, nil)
+			if err != nil {
+				log.Warn("Failed to create request for next page: %v", err)
+				break
+			}
+			req.Header.Set("User-Agent", "mcpetes-cli/0.0.1")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Warn("Failed to fetch next page: %v", err)
+				break
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				log.Warn("Failed to fetch next page: status %d", resp.StatusCode)
+				break
+			}
+
+			var nextPage RegistryIndex
+			if err := json.NewDecoder(resp.Body).Decode(&nextPage); err != nil {
+				log.Warn("Failed to parse next page: %v", err)
+				break
+			}
+
+			// Add servers from this page
+			for _, server := range nextPage.Servers {
+				repoURL := ""
+				if server.Repository.URL != "" {
+					repoURL = server.Repository.URL
+				}
+
+				servers = append(servers, ServerData{
+					Name:          server.Name,
+					Description:   server.Description,
+					RepositoryURL: repoURL,
+				})
+			}
+
+			// Update cursor for next page
+			cursor = nextPage.PageInfo.EndCursor
+			index.PageInfo.HasNextPage = nextPage.PageInfo.HasNextPage
+		}
+	}
+
+	if len(servers) == 0 {
+		return nil, fmt.Errorf("no servers found in response from %s", url)
+	}
+
+	return servers, nil
+}
+
+// formatRegistryURL ensures the registry URL is properly formatted for the specific registry type
+func formatRegistryURL(url string) string {
+	// Handle Glama API URLs
+	if match, _ := regexp.MatchString(`^https?://glama\.ai(/.*)?$`, url); match {
+		// If it's a Glama URL, ensure it points to the API endpoint
+		baseURL := "https://glama.ai/api/mcp/v1/servers"
+		// If additional query parameters were provided, preserve them
+		if strings.Contains(url, "?") {
+			parts := strings.SplitN(url, "?", 2)
+			return baseURL + "?" + parts[1]
+		}
+		return baseURL
+	}
+	return url
 }

@@ -52,7 +52,7 @@ func GetDefaultConfig() *Config {
 	}
 
 	return &Config{
-		SelectedMCP: "", // No default selection initially
+		MCPs: []string{}, // No default selections initially
 		Registries: []Registry{
 			{
 				Name: "glama",

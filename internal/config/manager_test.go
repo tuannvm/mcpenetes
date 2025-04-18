@@ -24,10 +24,11 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("Load existing config", func(t *testing.T) {
 		tempDir := t.TempDir()
 		expectedConfig := &Config{
-			SelectedMCP: "server-a",
+			Version: 1,
 			Registries: []Registry{
 				{Name: "official", URL: "http://example.com/index.json"},
 			},
+			MCPs: []string{"server-a"},
 			Clients: map[string]Client{
 				"cursor": {ConfigPath: "~/.cursor/config.json"},
 			},
@@ -94,7 +95,8 @@ func TestSaveConfig(t *testing.T) {
 	savePath := filepath.Join(tempDir, "test_config_save.yaml")
 
 	configToSave := &Config{
-		SelectedMCP: "server-b",
+		Version: 1,
+		MCPs: []string{"server-b"},
 		Registries: []Registry{{Name: "local", URL: "file:///tmp/index.json"}},
 		Clients:    map[string]Client{"vscode": {ConfigPath: "~/.config/Code/User/settings.json"}},
 		Backups:    BackupConfig{Path: "/tmp/mcpetes_backups"},

@@ -2,11 +2,11 @@ package config
 
 // Config represents the structure of config.yaml
 type Config struct {
-	Version     int               `yaml:"version"`
-	Registries  []Registry        `yaml:"registries"`
-	SelectedMCP string            `yaml:"selected_mcp"`
-	Clients     map[string]Client `yaml:"clients"`
-	Backups     BackupConfig      `yaml:"backups"`
+	Version    int               `yaml:"version"`
+	Registries []Registry        `yaml:"registries"`
+	MCPs       []string          `yaml:"mcps"`
+	Clients    map[string]Client `yaml:"clients"`
+	Backups    BackupConfig      `yaml:"backups"`
 }
 
 // Registry defines a registry endpoint
