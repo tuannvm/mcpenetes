@@ -152,7 +152,11 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer func() {
+		if cerr := source.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	// Ensure destination directory exists
 	dstDir := filepath.Dir(dst)
@@ -164,7 +168,11 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer destination.Close()
+	defer func() {
+		if cerr := destination.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = io.Copy(destination, source)
 	return err

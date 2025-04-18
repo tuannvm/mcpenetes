@@ -70,14 +70,18 @@ func (t *Translator) BackupClientConfig(clientName string, clientConf config.Cli
 	if err != nil {
 		return "", fmt.Errorf("failed to open source config file '%s': %w", clientConfigPath, err)
 	}
-	defer srcFile.Close()
+	defer func() {
+		_ = srcFile.Close()
+	}()
 
 	// Create destination backup file
 	dstFile, err := os.Create(backupFilePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create backup file '%s': %w", backupFilePath, err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		_ = dstFile.Close()
+	}()
 
 	// Copy content
 	_, err = io.Copy(dstFile, srcFile)
@@ -139,7 +143,7 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 	// Check if the file already exists to determine if we need to merge with existing config
 	existingConfig := make(map[string]interface{})
 	existingFile, err := os.ReadFile(clientConfigPath)
-	var configExists bool = false
+	var configExists = false
 	if err == nil && len(existingFile) > 0 {
 		configExists = true
 		err = json.Unmarshal(existingFile, &existingConfig)

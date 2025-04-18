@@ -92,7 +92,9 @@ func FetchMCPList(url string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch from %s: received status code %d", url, resp.StatusCode)
@@ -162,7 +164,9 @@ func FetchMCPList(url string) ([]string, error) {
 				log.Warn("Failed to fetch next page: %v", err)
 				break
 			}
-			defer resp.Body.Close()
+			defer func() {
+				_ = resp.Body.Close()
+			}()
 
 			if resp.StatusCode != http.StatusOK {
 				log.Warn("Failed to fetch next page: status %d", resp.StatusCode)
@@ -278,7 +282,9 @@ func FetchMCPServers(url string) ([]ServerData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch from %s: received status code %d", url, resp.StatusCode)
@@ -363,7 +369,9 @@ func FetchMCPServers(url string) ([]ServerData, error) {
 				log.Warn("Failed to fetch next page: %v", err)
 				break
 			}
-			defer resp.Body.Close()
+			defer func() {
+				_ = resp.Body.Close()
+			}()
 
 			if resp.StatusCode != http.StatusOK {
 				log.Warn("Failed to fetch next page: status %d", resp.StatusCode)
